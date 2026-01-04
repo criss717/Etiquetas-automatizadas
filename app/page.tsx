@@ -403,7 +403,7 @@ export default function Home() {
                 {/* Botón Eliminar */}
                 <button
                   onClick={() => handleDeleteLabel(idx)}
-                  className="absolute top-2 right-2 p-2 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-100 z-10 cursor-pointer"
+                  className="absolute top-2 right-2 p-2 bg-red-50 text-red-500 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all hover:bg-red-100 z-20 cursor-pointer shadow-sm border border-red-100"
                   title="Eliminar etiqueta"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
