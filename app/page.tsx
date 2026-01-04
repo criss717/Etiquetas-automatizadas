@@ -66,7 +66,6 @@ export default function Home() {
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
     setLabels((prev) => [...prev, { ...manualForm }]);
-    setManualForm((prev) => ({ ...prev, name: "" }));
   };
 
   /**
@@ -152,8 +151,8 @@ export default function Home() {
 
       const A4_WIDTH = 2480;
       const A4_HEIGHT = 3508;
-      const LABEL_SIZE = 520; // 5cm
-      const MARGIN = 75;
+      const LABEL_SIZE = 585; // 5cm
+      const MARGIN = 25;
       const SPACING = 20;
 
       // Cálculo de capacidad
