@@ -46,7 +46,8 @@ export default function Home() {
     type: "CORPORAL",
   });
 
-  const handleManualAdd = () => {
+  const handleManualAdd = (e: React.FormEvent) => {
+    e.preventDefault();
     setLabels((prev) => [...prev, { ...manualForm }]);
     //reset form
     setManualForm((prev) => ({ ...prev, name: "" }));
@@ -137,7 +138,7 @@ export default function Home() {
                 <button
                   onClick={() => submit({ prompt: input })}
                   disabled={isLoading || !input}
-                  className="w-full py-3 bg-gradient from-fuchsia-700 to-purple-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="w-full py-3 bg-linear-to-r from-fuchsia-700 to-purple-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {isLoading ? "Generando..." : "Generar Lote"}
                 </button>
@@ -148,11 +149,13 @@ export default function Home() {
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
+              <form onSubmit={handleManualAdd} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Nombre</label>
                   <input
                     type="text"
+                    required
+                    placeholder="Nombre"
                     value={manualForm.name}
                     onChange={(e) => setManualForm({ ...manualForm, name: e.target.value.toUpperCase() })}
                     className="w-full p-2 border border-stone-300 rounded-md focus:ring-2 focus:ring-fuchsia-200 outline-none font-bold text-fuchsia-900"
@@ -163,6 +166,8 @@ export default function Home() {
                     <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Propiedad 1</label>
                     <input
                       type="text"
+                      required
+                      placeholder="Propiedad 1"
                       value={manualForm.prop1}
                       onChange={(e) => setManualForm({ ...manualForm, prop1: e.target.value.toUpperCase() })}
                       className="w-full p-2 border border-stone-300 rounded-md focus:ring-1 focus:ring-fuchsia-200 outline-none text-xs"
@@ -172,6 +177,8 @@ export default function Home() {
                     <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Propiedad 2</label>
                     <input
                       type="text"
+                      required
+                      placeholder="Propiedad 2"
                       value={manualForm.prop2}
                       onChange={(e) => setManualForm({ ...manualForm, prop2: e.target.value.toUpperCase() })}
                       className="w-full p-2 border border-stone-300 rounded-md focus:ring-1 focus:ring-fuchsia-200 outline-none text-xs"
@@ -182,18 +189,19 @@ export default function Home() {
                   <label className="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Tipo</label>
                   <input
                     type="text"
+                    required
+                    placeholder="Tipo"
                     value={manualForm.type}
                     onChange={(e) => setManualForm({ ...manualForm, type: e.target.value.toUpperCase() })}
                     className="w-full p-2 border border-stone-300 rounded-md focus:ring-1 focus:ring-fuchsia-200 outline-none text-sm"
                   />
                 </div>
-                <button
-                  onClick={handleManualAdd}
+                <button type="submit"
                   className="w-full py-3 bg-stone-800 text-white rounded-lg font-medium hover:bg-black transition-all"
                 >
                   + Agregar a la Lista
                 </button>
-              </div>
+              </form>
             )}
           </div>
 
