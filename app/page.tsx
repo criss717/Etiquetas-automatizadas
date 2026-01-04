@@ -108,9 +108,7 @@ export default function Home() {
     setIsDownloadingA4(true);
     try {
       const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
-      const blobCount = Object.keys(blobs).length;
-
-      if (blobCount === 0) {
+      if (targetLabels.length === 0) {
         alert("No hay imágenes renderizadas. Espera un momento.");
         setIsDownloadingA4(false);
         return;
@@ -118,49 +116,67 @@ export default function Home() {
 
       const A4_WIDTH = 2480;
       const A4_HEIGHT = 3508;
-      const LABEL_SIZE = 520;
+      const LABEL_SIZE = 520; // 5cm
       const MARGIN = 75;
       const SPACING = 20;
 
-      const canvas = document.createElement("canvas");
-      canvas.width = A4_WIDTH;
-      canvas.height = A4_HEIGHT;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) throw new Error("Could not get canvas context");
+      // Cálculo de capacidad
+      const cols = Math.floor((A4_WIDTH - 2 * MARGIN + SPACING) / (LABEL_SIZE + SPACING));
+      const rows = Math.floor((A4_HEIGHT - 2 * MARGIN + SPACING) / (LABEL_SIZE + SPACING));
+      const labelsPerPage = cols * rows; // ~24 etiquetas
 
-      ctx.fillStyle = "white";
-      ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+      const pages: Blob[] = [];
+      const totalPages = Math.ceil(targetLabels.length / labelsPerPage);
 
-      let x = MARGIN;
-      let y = MARGIN;
+      for (let p = 0; p < totalPages; p++) {
+        const canvas = document.createElement("canvas");
+        canvas.width = A4_WIDTH;
+        canvas.height = A4_HEIGHT;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
 
-      for (let i = 0; i < targetLabels.length; i++) {
-        const blob = blobs[i];
-        if (!blob) continue;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
 
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = e.target?.result as string;
-          };
-          reader.readAsDataURL(blob);
-        });
+        const startIdx = p * labelsPerPage;
+        const endIdx = Math.min(startIdx + labelsPerPage, targetLabels.length);
 
-        ctx.drawImage(img, x, y, LABEL_SIZE, LABEL_SIZE);
-        x += LABEL_SIZE + SPACING;
-        if (x + LABEL_SIZE + MARGIN > A4_WIDTH) {
-          x = MARGIN;
-          y += LABEL_SIZE + SPACING;
+        let x = MARGIN;
+        let y = MARGIN;
+
+        for (let i = startIdx; i < endIdx; i++) {
+          const blob = blobs[i];
+          if (!blob) continue;
+
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => resolve(img);
+              img.onerror = reject;
+              img.src = e.target?.result as string;
+            };
+            reader.readAsDataURL(blob);
+          });
+
+          ctx.drawImage(img, x, y, LABEL_SIZE, LABEL_SIZE);
+
+          x += LABEL_SIZE + SPACING;
+          if (x + LABEL_SIZE + MARGIN > A4_WIDTH) {
+            x = MARGIN;
+            y += LABEL_SIZE + SPACING;
+          }
         }
-        if (y + LABEL_SIZE + MARGIN > A4_HEIGHT) break;
+
+        const pageBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+        if (pageBlob) pages.push(pageBlob);
       }
 
-      canvas.toBlob((blob) => {
-        if (!blob) return;
-        const url = URL.createObjectURL(blob);
+      if (pages.length === 0) throw new Error("No se generaron páginas");
+
+      if (pages.length === 1) {
+        // Descarga directa si es solo una página
+        const url = URL.createObjectURL(pages[0]);
         const a = document.createElement("a");
         a.style.display = "none";
         a.href = url;
@@ -169,9 +185,26 @@ export default function Home() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-      }, "image/png");
+      } else {
+        // ZIP si son varias páginas
+        const zip = new JSZip();
+        pages.forEach((blob, idx) => {
+          zip.file(`hoja_A4_${idx + 1}.png`, blob);
+        });
+        const content = await zip.generateAsync({ type: "blob" });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = "hojas_impresion_A4.zip";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
     } catch (e) {
       console.error(e);
+      alert("Error al generar las hojas A4");
     } finally {
       setIsDownloadingA4(false);
     }
