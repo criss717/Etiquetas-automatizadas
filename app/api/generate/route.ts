@@ -18,8 +18,8 @@ export async function POST(req: Request) {
         schema: z.object({
             labels: z.array(z.object({
                 name: z.string().describe("Nombre del producto (ej: FRUTOS ROJOS)"),
-                prop1: z.string().describe("Propiedad izquierda (ej: REVITALIZA o para la suerte)"),
-                prop2: z.string().describe("Propiedad derecha (ej: ANTIOXIDANTE o previene arrugas)"),
+                prop1: z.string().describe("Propiedad izquierda (ej: ELEVA LA VIBRACIÓN o LIMPIEZA ENERGETICA)"),
+                prop2: z.string().describe("Propiedad derecha (ej: ALIVIA EL RESTRES o PREVIENE ARRUGAS)"),
                 type: z.string().describe("Tipo de producto (ej: CORPORAL)"),
             })),
         }),

@@ -63,8 +63,8 @@ export default function LabelPreview({ data, onBlobReady, className }: LabelPrev
             ctx.font = `400 ${fontSizeProps}px ${fontName}`;
             const propsY = (lineTopY + lineBottomY) / 2 + (fontSizeProps / 3);
 
-            ctx.fillText(data.prop1?.toUpperCase() || "", W * 0.32, propsY - 20);
-            ctx.fillText(data.prop2?.toUpperCase() || "", W * 0.65, propsY - 20);
+            ctx.fillText(data.prop1?.toUpperCase() || "", W * 0.30, propsY - 20);
+            ctx.fillText(data.prop2?.toUpperCase() || "", W * 0.68, propsY - 20);
 
             // --- TIPO (NORMAL) ---
             const fontSizeType = W * 0.031;

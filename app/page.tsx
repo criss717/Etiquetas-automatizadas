@@ -25,12 +25,16 @@ export default function Home() {
   const [isDownloadingZip, setIsDownloadingZip] = useState(false);
   const [isDownloadingA4, setIsDownloadingA4] = useState(false);
 
+  // Unificar etiquetas de IA y manuales para permitir edición/borrado
+  const [aiLabels, setAiLabels] = useState<LabelData[]>([]);
+
   const { object, submit, isLoading } = useObject({
     api: "/api/generate",
     schema: schema,
     onFinish: (result) => {
       if (result.object?.labels) {
         setApiError(null);
+        setAiLabels(result.object.labels as LabelData[]);
       }
     },
     onError: (error) => {
@@ -48,7 +52,9 @@ export default function Home() {
     },
   });
 
-  const currentLabels = object?.labels || labels;
+  const currentLabels = mode === 'ai'
+    ? (isLoading ? (object?.labels || []) : aiLabels)
+    : labels;
 
   const [manualForm, setManualForm] = useState<LabelData>({
     name: "LAVANDA",
@@ -63,13 +69,43 @@ export default function Home() {
     setManualForm((prev) => ({ ...prev, name: "" }));
   };
 
+  /**
+   * Elimina una etiqueta específica por su índice.
+   * También limpia el blob asociado y reindexa el estado de blobs.
+   * @param index - El índice de la etiqueta a eliminar
+   */
+  const handleDeleteLabel = (index: number) => {
+    if (mode === 'ai') {
+      setAiLabels((prev) => prev.filter((_, i) => i !== index));
+    } else {
+      setLabels((prev) => prev.filter((_, i) => i !== index));
+    }
+
+    // Limpiar y reindexar blobs
+    setBlobs((prev) => {
+      const newBlobs: { [key: number]: Blob } = {};
+      const keys = Object.keys(prev).map(Number).sort((a, b) => a - b);
+
+      // Filtramos la clave que coincide con el índice borrado
+      // Y desplazamos las claves superiores una posición hacia abajo
+      let newIdx = 0;
+      keys.forEach((oldIdx) => {
+        if (oldIdx !== index) {
+          newBlobs[newIdx] = prev[oldIdx];
+          newIdx++;
+        }
+      });
+      return newBlobs;
+    });
+  };
+
   const dlZip = async () => {
     if (isDownloadingZip) return;
     setIsDownloadingZip(true);
     try {
       const zip = new JSZip();
       const folder = zip.folder("etiquetas");
-      const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
+      const targetLabels = currentLabels;
 
       let count = 0;
       targetLabels.forEach((label, idx) => {
@@ -79,7 +115,7 @@ export default function Home() {
           count++;
         }
       });
-
+      // ... (rest of the functions remain mostly same, but targetLabels = currentLabels)
       if (count === 0) {
         alert("No hay imágenes listas para descargar. Espera a que se generen.");
         setIsDownloadingZip(false);
@@ -107,7 +143,7 @@ export default function Home() {
     if (isDownloadingA4) return;
     setIsDownloadingA4(true);
     try {
-      const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
+      const targetLabels = currentLabels;
       if (targetLabels.length === 0) {
         alert("No hay imágenes renderizadas. Espera un momento.");
         setIsDownloadingA4(false);
@@ -225,7 +261,7 @@ export default function Home() {
         <div className="lg:col-span-4 space-y-6">
           <div className="flex bg-white rounded-lg p-1 shadow-sm border border-stone-200">
             <button
-              onClick={() => { setMode("ai"); setLabels([]); setApiError(null); }}
+              onClick={() => { setMode("ai"); setApiError(null); }}
               className={`flex-1 cursor-pointer py-2 px-4 rounded-md text-sm font-medium transition-colors ${mode === "ai"
                 ? "bg-fuchsia-100 text-fuchsia-900"
                 : "text-stone-500 hover:text-stone-700"
@@ -334,7 +370,7 @@ export default function Home() {
           <div className="bg-fuchsia-50 p-4 rounded-xl border border-fuchsia-100">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-fuchsia-900">
-                Etiquetas Listas: {mode === 'ai' ? (currentLabels?.length || 0) : labels.length}
+                Etiquetas Listas: {currentLabels.length}
               </span>
               <span className="text-xs text-fuchsia-600 bg-fuchsia-200 px-2 py-1 rounded-full">
                 {Object.keys(blobs).length} Renderizadas
@@ -363,8 +399,19 @@ export default function Home() {
 
         <div className="lg:col-span-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {(mode === 'ai' ? (currentLabels || []) : labels).map((label, idx) => (
-              <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex flex-col items-center relative group">
+            {currentLabels.map((label, idx) => (
+              <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex flex-col items-center relative group overflow-hidden">
+                {/* Botón Eliminar */}
+                <button
+                  onClick={() => handleDeleteLabel(idx)}
+                  className="absolute top-2 right-2 p-2 bg-red-50 text-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-all hover:bg-red-100 z-10 cursor-pointer"
+                  title="Eliminar etiqueta"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </button>
+
                 <LabelPreview
                   data={label as LabelData}
                   className="w-full max-w-[300px]"
@@ -380,8 +427,8 @@ export default function Home() {
                 </div>
               </div>
             ))}
-            {((mode === 'ai' && (!currentLabels || currentLabels.length === 0)) || (mode === 'manual' && labels.length === 0)) && (
-              <div className="col-span-full py-20 text-center text-stone-400 border-2 border-dashed border-stone-200 rounded-xl">
+            {currentLabels.length === 0 && (
+              <div className="col-span-full h-[calc(100vh-10rem)] py-20 text-center text-stone-400 border-2 border-dashed border-stone-200 rounded-xl">
                 <p>No hay etiquetas generadas aún.</p>
                 <p className="text-sm">Usa el panel izquierdo para comenzar.</p>
               </div>
