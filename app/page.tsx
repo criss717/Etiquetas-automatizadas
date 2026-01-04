@@ -6,8 +6,7 @@ import { z } from "zod";
 import JSZip from "jszip";
 import LabelPreview, { LabelData } from "@/components/LabelPreview";
 
-// Schema definition for client-side type inference if needed, 
-// though useObject is generic.
+// Schema definition for client-side type inference
 const schema = z.object({
   labels: z.array(z.object({
     name: z.string(),
@@ -22,23 +21,35 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [labels, setLabels] = useState<LabelData[]>([]);
   const [blobs, setBlobs] = useState<{ [key: number]: Blob }>({});
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isDownloadingZip, setIsDownloadingZip] = useState(false);
+  const [isDownloadingA4, setIsDownloadingA4] = useState(false);
 
   const { object, submit, isLoading } = useObject({
     api: "/api/generate",
     schema: schema,
     onFinish: (result) => {
       if (result.object?.labels) {
-        // Merge or replace? Let's append if user wants, but for now replace to keep simple loop?
-        // UseState 'labels' tracks the confirmed list.
-        // 'object' tracks the streaming result.
+        setApiError(null);
+      }
+    },
+    onError: (error) => {
+      console.error("Error completo:", error);
+      const message = (error as any)?.message || String(error);
+      const isQuota = message.toLowerCase().includes("quota") ||
+        message.includes("429") ||
+        (error as any)?.name === "AI_RetryError";
+
+      if (isQuota) {
+        setApiError("⚠️ Has excedido el límite gratuito de Gemini. Por favor, espera un minuto antes de reintentar.");
+      } else {
+        setApiError("❌ Error de comunicación: " + message.substring(0, 100));
       }
     },
   });
 
-  // Sync streaming object to labels state for preview
   const currentLabels = object?.labels || labels;
 
-  // Manual Form State
   const [manualForm, setManualForm] = useState<LabelData>({
     name: "LAVANDA",
     prop1: "RELAJANTE",
@@ -49,43 +60,121 @@ export default function Home() {
   const handleManualAdd = (e: React.FormEvent) => {
     e.preventDefault();
     setLabels((prev) => [...prev, { ...manualForm }]);
-    //reset form
     setManualForm((prev) => ({ ...prev, name: "" }));
   };
 
   const dlZip = async () => {
-    const zip = new JSZip();
-    const folder = zip.folder("etiquetas");
+    if (isDownloadingZip) return;
+    setIsDownloadingZip(true);
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder("etiquetas");
+      const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
 
-    // Check if we have all blobs
-    // Note: currentLabels might include streaming partials. verify completeness?
-    // We only download what is in 'labels' (manual) or 'object.labels' (ai)
-    const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
+      let count = 0;
+      targetLabels.forEach((label, idx) => {
+        const blob = blobs[idx];
+        if (blob && folder && label) {
+          folder.file(`${label.name}-${idx}.png`, blob);
+          count++;
+        }
+      });
 
-    // We need to wait for blobs if they are not ready?
-    // Simplified: We rely on the 'blobs' state being populated by the rendered components.
-
-    let count = 0;
-    targetLabels.forEach((label, idx) => {
-      const blob = blobs[idx];
-      if (blob && folder && label) {
-        folder.file(`${label.name}-${idx}.png`, blob);
-        count++;
+      if (count === 0) {
+        alert("No hay imágenes listas para descargar. Espera a que se generen.");
+        setIsDownloadingZip(false);
+        return;
       }
-    });
 
-    if (count === 0) {
-      alert("No hay imágenes listas para descargar. Espera a que se generen.");
-      return;
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.style.display = "none";
+      a.href = url;
+      a.download = "etiquetas_alquimara.zip";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDownloadingZip(false);
     }
+  };
 
-    const content = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(content);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "etiquetas_alquimara.zip";
-    a.click();
-    URL.revokeObjectURL(url);
+  const generateA4Sheet = async () => {
+    if (isDownloadingA4) return;
+    setIsDownloadingA4(true);
+    try {
+      const targetLabels = mode === 'ai' ? (object?.labels || []) : labels;
+      const blobCount = Object.keys(blobs).length;
+
+      if (blobCount === 0) {
+        alert("No hay imágenes renderizadas. Espera un momento.");
+        setIsDownloadingA4(false);
+        return;
+      }
+
+      const A4_WIDTH = 2480;
+      const A4_HEIGHT = 3508;
+      const LABEL_SIZE = 520;
+      const MARGIN = 75;
+      const SPACING = 20;
+
+      const canvas = document.createElement("canvas");
+      canvas.width = A4_WIDTH;
+      canvas.height = A4_HEIGHT;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not get canvas context");
+
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+      let x = MARGIN;
+      let y = MARGIN;
+
+      for (let i = 0; i < targetLabels.length; i++) {
+        const blob = blobs[i];
+        if (!blob) continue;
+
+        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => resolve(img);
+            img.onerror = reject;
+            img.src = e.target?.result as string;
+          };
+          reader.readAsDataURL(blob);
+        });
+
+        ctx.drawImage(img, x, y, LABEL_SIZE, LABEL_SIZE);
+        x += LABEL_SIZE + SPACING;
+        if (x + LABEL_SIZE + MARGIN > A4_WIDTH) {
+          x = MARGIN;
+          y += LABEL_SIZE + SPACING;
+        }
+        if (y + LABEL_SIZE + MARGIN > A4_HEIGHT) break;
+      }
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = "hoja_impresion_A4.png";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, "image/png");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsDownloadingA4(false);
+    }
   };
 
   return (
@@ -100,12 +189,11 @@ export default function Home() {
       </header>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* LEFT PANEL: CONTROLS */}
         <div className="lg:col-span-4 space-y-6">
           <div className="flex bg-white rounded-lg p-1 shadow-sm border border-stone-200">
             <button
-              onClick={() => { setMode("ai"); setLabels([]); }}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${mode === "ai"
+              onClick={() => { setMode("ai"); setLabels([]); setApiError(null); }}
+              className={`flex-1 cursor-pointer py-2 px-4 rounded-md text-sm font-medium transition-colors ${mode === "ai"
                 ? "bg-fuchsia-100 text-fuchsia-900"
                 : "text-stone-500 hover:text-stone-700"
                 }`}
@@ -113,8 +201,8 @@ export default function Home() {
               ✨ IA Generadora
             </button>
             <button
-              onClick={() => { setMode("manual"); }} // Don't clear labels in manual to allow accumulation
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${mode === "manual"
+              onClick={() => { setMode("manual"); setApiError(null); }}
+              className={`flex-1 cursor-pointer py-2 px-4 rounded-md text-sm font-medium transition-colors ${mode === "manual"
                 ? "bg-fuchsia-100 text-fuchsia-900"
                 : "text-stone-500 hover:text-stone-700"
                 }`}
@@ -129,6 +217,11 @@ export default function Home() {
                 <label className="block text-sm font-medium text-stone-700">
                   ¿Qué etiquetas necesitas hoy?
                 </label>
+                {apiError && (
+                  <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg animate-in fade-in slide-in-from-top-2">
+                    {apiError}
+                  </div>
+                )}
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -136,9 +229,9 @@ export default function Home() {
                   className="w-full h-32 p-3 border border-stone-300 rounded-lg focus:ring-2 focus:ring-fuchsia-500 focus:border-transparent outline-none resize-none"
                 />
                 <button
-                  onClick={() => submit({ prompt: input })}
+                  onClick={() => { setApiError(null); submit({ prompt: input }); }}
                   disabled={isLoading || !input}
-                  className="w-full py-3 bg-linear-to-r from-fuchsia-700 to-purple-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="w-full cursor-pointer py-3 bg-linear-to-r from-fuchsia-700 to-purple-700 text-white rounded-lg font-medium shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                 >
                   {isLoading ? "Generando..." : "Generar Lote"}
                 </button>
@@ -197,7 +290,7 @@ export default function Home() {
                   />
                 </div>
                 <button type="submit"
-                  className="w-full py-3 bg-stone-800 text-white rounded-lg font-medium hover:bg-black transition-all"
+                  className="w-full cursor-pointer py-3 bg-stone-800 text-white rounded-lg font-medium hover:bg-black transition-all"
                 >
                   + Agregar a la Lista
                 </button>
@@ -205,7 +298,6 @@ export default function Home() {
             )}
           </div>
 
-          {/* Download Button */}
           <div className="bg-fuchsia-50 p-4 rounded-xl border border-fuchsia-100">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm font-medium text-fuchsia-900">
@@ -217,19 +309,29 @@ export default function Home() {
             </div>
             <button
               onClick={dlZip}
-              className="w-full py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2"
+              disabled={isDownloadingZip || isDownloadingA4}
+              className="w-full cursor-pointer py-3 bg-fuchsia-600 hover:bg-fuchsia-700 text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 mb-2 disabled:opacity-50"
             >
-              📥 Descargar ZIP
+              {isDownloadingZip ? (
+                <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : "📥"} Descargar ZIP
+            </button>
+            <button
+              onClick={generateA4Sheet}
+              disabled={isDownloadingZip || isDownloadingA4}
+              className="w-full cursor-pointer py-3 bg-stone-800 hover:bg-black text-white rounded-lg font-bold shadow-md transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isDownloadingA4 ? (
+                <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              ) : "📄"} Descargar Hoja A4
             </button>
           </div>
         </div>
 
-        {/* RIGHT PANEL: PREVIEWS */}
         <div className="lg:col-span-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {(mode === 'ai' ? (currentLabels || []) : labels).map((label, idx) => (
               <div key={idx} className="bg-white p-4 rounded-xl shadow-sm border border-stone-200 flex flex-col items-center relative group">
-                {/* Delete button (Manual mode only?) - Optional */}
                 <LabelPreview
                   data={label as LabelData}
                   className="w-full max-w-[300px]"
@@ -245,8 +347,6 @@ export default function Home() {
                 </div>
               </div>
             ))}
-
-            {/* Empty State */}
             {((mode === 'ai' && (!currentLabels || currentLabels.length === 0)) || (mode === 'manual' && labels.length === 0)) && (
               <div className="col-span-full py-20 text-center text-stone-400 border-2 border-dashed border-stone-200 rounded-xl">
                 <p>No hay etiquetas generadas aún.</p>

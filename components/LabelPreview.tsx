@@ -25,12 +25,12 @@ export default function LabelPreview({ data, onBlobReady, className }: LabelPrev
 
         // Load Image
         const img = new Image();
-        img.src = "/base-label-limpia.png";
+        img.src = "/base-label-limpia-rec.png";
         img.crossOrigin = "anonymous";
 
         img.onload = async () => {
             // 1. Setup Match Dimensions
-            canvas.width = img.width;
+            canvas.width = img.width
             canvas.height = img.height;
             const W = img.width;
             const H = img.height;
@@ -50,27 +50,27 @@ export default function LabelPreview({ data, onBlobReady, className }: LabelPrev
             ctx.lineWidth = 2;
 
             // --- TÍTULO (RECTO - NEGRITA) ---
-            const fontSizeTitle = W * 0.045;
+            const fontSizeTitle = W * 0.055;
             ctx.font = `bold ${fontSizeTitle}px ${fontName}`;
-            const titleY = H * 0.26;
-            ctx.fillText(data.name.toUpperCase(), (W / 2) + (fontSizeTitle / 2), titleY);
+            const titleY = H * 0.19;
+            ctx.fillText(data.name?.toUpperCase() || "", (W / 2), titleY);
 
             const lineTopY = H * 0.72;
             const lineBottomY = H * 0.83;
 
             // --- PROPIEDADES (NORMAL) ---
-            const fontSizeProps = W * 0.023;
+            const fontSizeProps = W * 0.031;
             ctx.font = `400 ${fontSizeProps}px ${fontName}`;
             const propsY = (lineTopY + lineBottomY) / 2 + (fontSizeProps / 3);
 
-            ctx.fillText(data.prop1.toUpperCase(), W * 0.42, propsY);
-            ctx.fillText(data.prop2.toUpperCase(), W * 0.62, propsY);
+            ctx.fillText(data.prop1?.toUpperCase() || "", W * 0.32, propsY - 20);
+            ctx.fillText(data.prop2?.toUpperCase() || "", W * 0.65, propsY - 20);
 
             // --- TIPO (NORMAL) ---
-            const fontSizeType = W * 0.023;
+            const fontSizeType = W * 0.031;
             ctx.font = `400 ${fontSizeType}px ${fontName}`;
             const typeY = H * 0.90;
-            ctx.fillText(data.type.toUpperCase(), W * 0.52, typeY);
+            ctx.fillText(data.type?.toUpperCase() || "", W * 0.49, typeY);
 
             // Notify Ready
             canvas.toBlob((blob) => {
